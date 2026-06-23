@@ -22,7 +22,7 @@ static unsigned long lastWifiCheckMs = 0;
 
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LegacyBridge S2</title>
+<title>lg_apa102</title>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:radial-gradient(circle at top,#1a2240,#0b1020 60%);color:#e5eefc}
 .w{max-width:1060px;margin:0 auto;padding:20px}
@@ -46,7 +46,7 @@ button.d{background:#ff7a7a;color:#200}
 </style></head><body><div class="w">
 <div class="c">
   <div class="h">
-    <div><div class="t">LegacyBridge S2</div><div class="m">ESP32-S2 Mini protected OTA + recovery</div></div>
+    <div><div class="t">lg_apa102</div><div class="m">ESP32-S2 Mini protected OTA + recovery</div></div>
     <div class="st" id="status">Loading...</div>
   </div>
 </div>

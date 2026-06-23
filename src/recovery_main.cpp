@@ -19,7 +19,7 @@ static char lastError[128] = "idle";
 
 static const char RECOVERY_HTML[] PROGMEM = R"rawliteral(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LegacyBridge Recovery</title>
+<title>lg_apa102 Recovery</title>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:radial-gradient(circle at top,#3a1520,#10070a 60%);color:#ffeef2}
 .w{max-width:900px;margin:0 auto;padding:20px}
@@ -33,13 +33,13 @@ button.s{background:#3a2430;color:#ffeef2}
 .p{display:inline-block;padding:4px 8px;border-radius:999px;background:#311521;color:#ffd9e1;font-size:12px;margin-right:6px}
 </style></head><body><div class="w">
 <div class="c">
-  <div style="font-size:28px;font-weight:800">LegacyBridge Recovery</div>
+  <div style="font-size:28px;font-weight:800">lg_apa102 Recovery</div>
   <div class="m">Signed OTA recovery for ESP32-S2 Mini. The bootloader stays untouched.</div>
 </div>
 <div class="c">
   <b>Update source</b>
   <label>Pack base URL</label><input id="packBaseUrl">
-  <div class="m">Example: https://user.github.io/legacy-bridge-s2/latest/</div>
+  <div class="m">Example: https://user.github.io/lg_apa102/latest/</div>
   <div class="r">
     <button onclick="saveCfg()">Save</button>
     <button onclick="flash()">Flash signed release</button>

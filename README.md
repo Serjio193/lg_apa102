@@ -1,4 +1,4 @@
-# LegacyBridgeS2
+# lg_apa102
 
 ESP32-S2 Mini firmware inspired by `legacy-bridge`:
 

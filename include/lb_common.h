@@ -8,9 +8,9 @@ static constexpr uint16_t LB_CONFIG_VERSION = 1;
 static constexpr const char *LB_PREFS_NS = "lb2";
 static constexpr const char *LB_DEFAULT_AP_SSID = "LB-SETUP";
 static constexpr const char *LB_DEFAULT_AP_PASS = "lb123456";
-static constexpr const char *LB_DEFAULT_DEVICE_NAME = "LegacyBridgeS2";
+static constexpr const char *LB_DEFAULT_DEVICE_NAME = "lg_apa102";
 static constexpr const char *LB_DEFAULT_PACK_BASE_URL =
-    "https://serjio193.github.io/legacy-bridge-s2/latest/";
+    "https://serjio193.github.io/lg_apa102/latest/";
 
 struct LBConfig {
   uint32_t magic;
