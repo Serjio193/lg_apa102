@@ -1,0 +1,12 @@
+.pio/
+dist/
+keys/release_private.pem
+keys/*.pem
+*.sig
+*.bin
+!tools/
+!scripts/
+!src/
+!include/
+!platformio.ini
+!README.md

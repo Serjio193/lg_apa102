@@ -1,0 +1,13 @@
+#pragma once
+
+static constexpr const char LB_RELEASE_PUBLIC_KEY_PEM[] = R"pem(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqFeTKq8CJjZjk6rusv6v
+trR5qYllEbYrUwXMORXyrAKKGuDS7TqJW4qvPWtQup40hvk82VqGRJ85VDo42sNP
++8wSLyhzNK+EYgVtmB+oZ51QzXm5s55cfj6HvQ+4FxH6aJeZQpy5EsM+qmekciad
+4Vk9Fw3sxHHeAmZLjCqTvO8Tf7+l3Y61MjqdjqEbf89VTg3Y4tOF+YsEeZSJwmjO
+88Z4uKwl2CiCCkCQ9vGIb8vCua+DfHAEEczPWrxGJV0z4ALRJ0XIf75kUJ+Tbxpn
+Cp3pEaci9AXUiOlaKRIWqczzfB7wrkO4uxOcm1vMXjYlveEXjddgZ/IzB8ng22D4
+cwIDAQAB
+-----END PUBLIC KEY-----
+)pem";
