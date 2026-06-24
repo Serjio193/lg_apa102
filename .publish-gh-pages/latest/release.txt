@@ -1,5 +1,0 @@
-version=v0.1.0
-firmware=firmware.bin
-firmware_sig=firmware.sig
-recovery=recovery.bin
-recovery_sig=recovery.sig

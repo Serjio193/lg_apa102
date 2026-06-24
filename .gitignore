@@ -1,6 +1,7 @@
 .pio/
 dist/
 ui/node_modules/
+.publish-gh-pages/
 keys/release_private.pem
 keys/*.pem
 *.sig
