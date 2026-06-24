@@ -1,5 +1,6 @@
 .pio/
 dist/
+ui/node_modules/
 keys/release_private.pem
 keys/*.pem
 *.sig
