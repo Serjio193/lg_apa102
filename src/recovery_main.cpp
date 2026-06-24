@@ -193,7 +193,8 @@ static const esp_partition_t *mainPartition() {
   return esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, nullptr);
 }
 
-static bool verifySignature(const uint8_t *data, size_t dataLen, const uint8_t *sig, size_t sigLen) {
+static bool verifySignatureHash(const uint8_t *hash, size_t hashLen, const uint8_t *sig, size_t sigLen) {
+  if (hashLen != 32) return false;
   mbedtls_pk_context pk;
   mbedtls_pk_init(&pk);
   if (mbedtls_pk_parse_public_key(&pk, reinterpret_cast<const unsigned char *>(LB_RELEASE_PUBLIC_KEY_PEM),
@@ -201,9 +202,7 @@ static bool verifySignature(const uint8_t *data, size_t dataLen, const uint8_t *
     mbedtls_pk_free(&pk);
     return false;
   }
-  uint8_t hash[32];
-  mbedtls_sha256_ret(data, dataLen, hash, 0);
-  int ok = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash), sig, sigLen);
+  int ok = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, hashLen, sig, sigLen);
   mbedtls_pk_free(&pk);
   return ok == 0;
 }
@@ -287,7 +286,7 @@ static bool flashFirmwareFromUrl(const String &url, const String &sigUrl) {
   mbedtls_sha256_finish_ret(&sha, hash);
   mbedtls_sha256_free(&sha);
   http.end();
-  if (!verifySignature(hash, sizeof(hash), sig, sigLen)) {
+  if (!verifySignatureHash(hash, sizeof(hash), sig, sigLen)) {
     esp_ota_abort(handle);
     setLastError("signature mismatch");
     return false;

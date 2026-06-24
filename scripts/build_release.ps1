@@ -36,7 +36,9 @@ New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
 "@ | Set-Content -Encoding ASCII $versionHeader
 
 & $python -m platformio run -d $root -e $Environment
+if ($LASTEXITCODE -ne 0) { throw "Main firmware build failed: $LASTEXITCODE" }
 & $python -m platformio run -d $root -e "${Environment}_recovery"
+if ($LASTEXITCODE -ne 0) { throw "Recovery firmware build failed: $LASTEXITCODE" }
 
 $firmware = Join-Path $root ".pio\\build\\$Environment\\firmware.bin"
 $recovery = Join-Path $root ".pio\\build\\${Environment}_recovery\\firmware.bin"
