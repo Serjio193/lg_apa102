@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $privateKey = Join-Path $root "keys\\release_private.pem"
 $signTool = Join-Path $root "tools\\sign_artifact.py"
+$versionHeader = Join-Path $root "include\\lb_version.h"
 
 $python = $env:PYTHON
 if (-not $python) {
@@ -27,6 +28,12 @@ if (-not $python) {
 if (-not $python) { throw "Python not found" }
 
 New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
+
+@"
+#pragma once
+
+#define LB_FIRMWARE_VERSION "$Version"
+"@ | Set-Content -Encoding ASCII $versionHeader
 
 & $python -m platformio run -d $root -e $Environment
 & $python -m platformio run -d $root -e "${Environment}_recovery"

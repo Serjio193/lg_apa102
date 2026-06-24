@@ -42,7 +42,8 @@ jobs:
       - name: Build release package
         shell: pwsh
         run: |
-          ./scripts/build_release.ps1 -Version "${{ github.ref_name }}"
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "main-${{ github.run_number }}-${{ github.sha }}".Substring(0, 20) }
+          ./scripts/build_release.ps1 -Version $version
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4

@@ -57,9 +57,7 @@ static inline void lbNormalizeDefaults(LBConfig *cfg) {
   if (cfg->deviceName[0] == '\0') {
     strlcpy(cfg->deviceName, LB_DEFAULT_DEVICE_NAME, sizeof(cfg->deviceName));
   }
-  if (cfg->packBaseUrl[0] == '\0') {
-    strlcpy(cfg->packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg->packBaseUrl));
-  }
+  strlcpy(cfg->packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg->packBaseUrl));
   if (cfg->ledCount == 0) cfg->ledCount = 1;
   if (cfg->ledBrightness == 0) cfg->ledBrightness = 1;
 }

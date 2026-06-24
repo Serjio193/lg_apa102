@@ -38,10 +38,8 @@ button.s{background:#3a2430;color:#ffeef2}
 </div>
 <div class="c">
   <b>Update source</b>
-  <label>Pack base URL</label><input id="packBaseUrl">
-  <div class="m">Example: https://user.github.io/lg_apa102/latest/</div>
+  <label>Pack base URL</label><div class="p">https://serjio193.github.io/lg_apa102/latest/</div>
   <div class="r">
-    <button onclick="saveCfg()">Save</button>
     <button onclick="flash()">Flash signed release</button>
     <button class="s" onclick="bootMain()">Boot main</button>
     <button class="s" onclick="resetCfg()">Reset settings</button>
@@ -60,13 +58,6 @@ async function loadStatus(){
   const r = await fetch('/api/status');
   const j = await r.json();
   statusEl.innerHTML = `<span class="p">${j.mode}</span><span class="p">${j.ip}</span><span class="p">${j.host}</span><div style="margin-top:8px">${j.packBaseUrl}</div><div style="margin-top:8px">${j.lastError}</div>`;
-  packBaseUrl.value = j.packBaseUrl;
-}
-async function saveCfg(){
-  const body = new URLSearchParams({packBaseUrl: packBaseUrl.value});
-  const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-  const j = await r.json();
-  msg.textContent = j.ok ? 'saved' : ('error: ' + j.error);
 }
 async function flash(){
   const r = await fetch('/api/recovery/flash', {method:'POST'});
@@ -325,35 +316,35 @@ static void handleStatus() {
 }
 
 static void handleConfig() {
-  if (server.hasArg("packBaseUrl")) {
-    lbCopyArg(cfg.packBaseUrl, sizeof(cfg.packBaseUrl), server.arg("packBaseUrl"));
-    if (cfg.packBaseUrl[0] == '\0') strlcpy(cfg.packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg.packBaseUrl));
-  }
-  lbSaveConfig(&cfg);
-  server.send(200, "application/json", "{\"ok\":true}");
+  server.send(403, "application/json", "{\"ok\":false,\"error\":\"update URL is fixed\"}");
 }
 
-static void handleFlash() {
+static bool performFlash() {
   String manifest;
-  String base = cfg.packBaseUrl;
+  String base = LB_DEFAULT_PACK_BASE_URL;
   if (!base.endsWith("/")) base += "/";
   if (!fetchText(base + "release.txt", manifest)) {
     setLastError("manifest download failed");
-    server.send(500, "application/json", "{\"ok\":false,\"error\":\"manifest download failed\"}");
-    return;
+    return false;
   }
   ReleaseInfo info{};
   if (!parseManifest(manifest, info)) {
     setLastError("manifest parse failed");
-    server.send(500, "application/json", "{\"ok\":false,\"error\":\"manifest parse failed\"}");
-    return;
+    return false;
   }
   if (!flashFirmwareFromUrl(info.firmwareUrl, info.firmwareSigUrl)) {
     setLastError("download or signature failed");
-    server.send(500, "application/json", "{\"ok\":false,\"error\":\"download or signature failed\"}");
-    return;
+    return false;
   }
   setLastError("flash ok");
+  return true;
+}
+
+static void handleFlash() {
+  if (!performFlash()) {
+    server.send(500, "application/json", "{\"ok\":false,\"error\":\"update failed\"}");
+    return;
+  }
   server.send(200, "application/json", "{\"ok\":true}");
   delay(400);
   ESP.restart();
@@ -398,6 +389,7 @@ static void setupWeb() {
 void setup() {
   lbLoadConfig(&cfg);
   if (!lbValidateConfig(&cfg)) lbSetDefaults(&cfg);
+  strlcpy(cfg.packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg.packBaseUrl));
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   String host = lbHostnameFromName(cfg.deviceName);
@@ -415,6 +407,15 @@ void setup() {
   }
   startMdns();
   setupWeb();
+  Preferences prefs;
+  prefs.begin(LB_PREFS_NS, false);
+  const bool updatePending = prefs.getBool("update_pending", false);
+  if (updatePending) prefs.putBool("update_pending", false);
+  prefs.end();
+  if (updatePending && WiFi.status() == WL_CONNECTED && performFlash()) {
+    delay(400);
+    ESP.restart();
+  }
 }
 
 void loop() {
