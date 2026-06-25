@@ -494,6 +494,8 @@ enum class AwaState : uint8_t {
   Fletcher2
 };
 
+// Adapted from awawa-dev/HyperSerialWLED AWA parser (MIT).
+// See THIRD_PARTY_NOTICES.md and licenses/HyperSerialWLED-MIT.txt.
 static void handleHyperHdrSerial() {
   static AwaState state = AwaState::HeaderA;
   static uint8_t headerCrc = 0;

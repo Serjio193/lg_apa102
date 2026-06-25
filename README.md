@@ -9,6 +9,12 @@ ESP32-S2 Mini firmware inspired by `legacy-bridge`:
 - configurable signed-update source
 - optional PIN protection for control and recovery APIs
 
+## License
+
+Original project code is licensed under the MIT License. The AWA parser is
+adapted from `awawa-dev/HyperSerialWLED`, and the firmware/UI include other
+open-source components. See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
 ## Hardware
 
 - Wemos S2 Mini / ESP32-S2
