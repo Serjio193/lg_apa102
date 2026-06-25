@@ -1,0 +1,7 @@
+version=v0.1.3
+firmware=firmware.bin
+firmware_sig=firmware.sig
+recovery=recovery.bin
+recovery_sig=recovery.sig
+license=LICENSE.txt
+third_party_notices=THIRD_PARTY_NOTICES.md
