@@ -9,6 +9,7 @@ $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $privateKey = Join-Path $root "keys\\release_private.pem"
 $signTool = Join-Path $root "tools\\sign_artifact.py"
 $versionHeader = Join-Path $root "include\\lb_version.h"
+$distRoot = Split-Path -Parent $ReleaseDir
 
 $python = $env:PYTHON
 if (-not $python) {
@@ -59,5 +60,34 @@ firmware_sig=firmware.sig
 recovery=recovery.bin
 recovery_sig=recovery.sig
 "@ | Set-Content -Encoding ASCII (Join-Path $ReleaseDir "release.txt")
+
+$latestIndex = @"
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>lg_apa102 $Version</title></head>
+<body style="font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px;background:#070b12;color:#e7edf8">
+<h1>lg_apa102 $Version</h1>
+<p>Подписанный пакет обновления для Wemos S2 Mini.</p>
+<ul>
+<li><a href="release.txt">release.txt</a></li>
+<li><a href="firmware.bin">firmware.bin</a></li>
+<li><a href="firmware.sig">firmware.sig</a></li>
+<li><a href="recovery.bin">recovery.bin</a></li>
+<li><a href="recovery.sig">recovery.sig</a></li>
+</ul>
+</body></html>
+"@
+$latestIndex | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir "index.html")
+
+New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
+@"
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>lg_apa102 releases</title></head>
+<body style="font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px;background:#070b12;color:#e7edf8">
+<h1>lg_apa102</h1>
+<p><a href="latest/">Открыть последний релиз</a></p>
+</body></html>
+"@ | Set-Content -Encoding UTF8 (Join-Path $distRoot "index.html")
 
 Write-Host "Release prepared in $ReleaseDir"

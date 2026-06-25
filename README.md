@@ -6,7 +6,8 @@ ESP32-S2 Mini firmware inspired by `legacy-bridge`:
 - recovery firmware in factory partition
 - signed release packages
 - configurable GPIO in the UI
-- update source pointed at a GitHub Pages or release directory
+- configurable signed-update source
+- optional PIN protection for control and recovery APIs
 
 ## Hardware
 
@@ -39,7 +40,22 @@ pio run -e lolin_s2_mini_recovery
 - `recovery.bin`
 - `recovery.sig`
 
-Point `packBaseUrl` at the directory containing those files.
+The canonical release directory is:
+
+`https://serjio193.github.io/lg_apa102/latest/`
+
+`packBaseUrl` can be changed in Settings. It must point at an HTTP(S)
+directory containing `release.txt` and the signed artifacts.
+
+GitHub Actions installs both Python and Node dependencies, builds the React UI
+from source, creates `dist/latest`, and publishes the whole `dist` directory.
+
+## Web API protection
+
+The device starts with API protection disabled so an existing installation is
+not locked out. Configure a 4-16 character PIN in Settings. After that, all
+state-changing endpoints, Wi-Fi scans, logs, and recovery actions require the
+`X-API-PIN` header. The browser stores the PIN only in `sessionStorage`.
 
 ## Notes
 

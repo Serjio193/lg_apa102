@@ -59,6 +59,8 @@ function App() {
   const [ledDetectIndex, setLedDetectIndex] = useState(0);
   const [ledDetectStep, setLedDetectStep] = useState(0);
   const [ledDetectCounts, setLedDetectCounts] = useState({});
+  const [apiPin, setApiPin] = useState(() => sessionStorage.getItem("lg_api_pin") || "");
+  const [newApiPin, setNewApiPin] = useState("");
   const [form, setForm] = useState(initialForm);
 
   const wifiRssi = info?.wifiRssi ?? 0;
@@ -146,7 +148,7 @@ function App() {
   useEffect(() => {
     if (!ledDetectActive) return undefined;
     const refreshDetection = async () => {
-      const json = await (await fetch("/api/led/detect/status")).json();
+      const json = await apiFetch("/api/led/detect/status");
       if (json.ok) {
         setLedDetectActive(Boolean(json.active));
         setLedDetectIndex(json.index ?? 0);
@@ -154,15 +156,29 @@ function App() {
     };
     const timer = setInterval(refreshDetection, 500);
     return () => clearInterval(timer);
-  }, [ledDetectActive]);
+  }, [ledDetectActive, apiPin]);
+
+  const updateSessionPin = (value) => {
+    setApiPin(value);
+    if (value) sessionStorage.setItem("lg_api_pin", value);
+    else sessionStorage.removeItem("lg_api_pin");
+  };
+
+  const apiFetch = async (url, options = {}) => {
+    const headers = new Headers(options.headers || {});
+    if (apiPin) headers.set("X-API-PIN", apiPin);
+    const response = await fetch(url, { ...options, headers });
+    const json = await response.json();
+    if (response.status === 401) setMessage("Ошибка: введите API PIN в настройках");
+    return json;
+  };
 
   const postForm = async (url, body) => {
-    const response = await fetch(url, {
+    return apiFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(body),
     });
-    return response.json();
   };
 
   const saveConfig = async () => {
@@ -172,6 +188,7 @@ function App() {
         deviceName: form.deviceName,
         wifiSsid: form.wifiSsid,
         wifiPass: form.wifiPass,
+        packBaseUrl: form.packBaseUrl,
       });
       setMessage(json.ok ? "Настройки сохранены. Устройство перезагружается." : `Ошибка: ${json.error}`);
     } finally {
@@ -234,7 +251,7 @@ function App() {
   };
 
   const stopLedDetection = async () => {
-    const json = await (await fetch("/api/led/detect/stop", { method: "POST" })).json();
+    const json = await apiFetch("/api/led/detect/stop", { method: "POST" });
     if (!json.ok) {
       setMessage(`Ошибка: ${json.error}`);
       return;
@@ -253,7 +270,7 @@ function App() {
       const total = Object.values(nextCounts).reduce((sum, value) => sum + value, 0);
       setForm((previous) => ({ ...previous, ledCount: total }));
       setLedDetectStep(4);
-      await fetch("/api/source/release", { method: "POST" });
+      await apiFetch("/api/source/release", { method: "POST" });
       setSourceOwner(0);
       setPowerOn(false);
       setMessage(`Определение завершено: ${total} LED`);
@@ -261,7 +278,7 @@ function App() {
   };
 
   const resetLedDetection = async () => {
-    if (ledDetectActive) await fetch("/api/led/detect/stop", { method: "POST" });
+    if (ledDetectActive) await apiFetch("/api/led/detect/stop", { method: "POST" });
     setLedDetectActive(false);
     setLedDetectIndex(0);
     setLedDetectStep(0);
@@ -283,13 +300,13 @@ function App() {
   };
 
   const claimManualSource = async () => {
-    const json = await (await fetch("/api/source/manual", { method: "POST" })).json();
+    const json = await apiFetch("/api/source/manual", { method: "POST" });
     if (json.ok) setSourceOwner(2);
     setMessage(json.ok ? "Ручной режим включён" : `Ошибка: ${json.error}`);
   };
 
   const releaseActiveSource = async () => {
-    const json = await (await fetch("/api/source/release", { method: "POST" })).json();
+    const json = await apiFetch("/api/source/release", { method: "POST" });
     if (json.ok) {
       setSourceOwner(0);
       setPowerOn(false);
@@ -300,7 +317,7 @@ function App() {
   const scanWifi = async () => {
     setWifiScanning(true);
     try {
-      const json = await (await fetch("/api/wifi/scan")).json();
+      const json = await apiFetch("/api/wifi/scan");
       setWifiNetworks(json.ok ? json.networks : []);
       setMessage(json.ok ? `Найдено сетей: ${json.networks.length}` : `Ошибка: ${json.error}`);
     } finally {
@@ -311,7 +328,7 @@ function App() {
   const refreshLog = async () => {
     setLogLoading(true);
     try {
-      const json = await (await fetch("/api/log")).json();
+      const json = await apiFetch("/api/log");
       setLogEntries(json.ok ? json.entries : []);
     } finally {
       setLogLoading(false);
@@ -319,7 +336,7 @@ function App() {
   };
 
   const clearLog = async () => {
-    const json = await (await fetch("/api/log/clear", { method: "POST" })).json();
+    const json = await apiFetch("/api/log/clear", { method: "POST" });
     setMessage(json.ok ? "Журнал очищен" : `Ошибка: ${json.error}`);
     if (json.ok) await refreshLog();
   };
@@ -338,7 +355,7 @@ function App() {
   const checkUpdate = async () => {
     setUpdateChecking(true);
     try {
-      const json = await (await fetch("/api/update/check")).json();
+      const json = await apiFetch("/api/update/check");
       setUpdateInfo(json.ok ? json : null);
       setMessage(json.ok ? (json.available ? `Доступна версия ${json.latest}` : "Установлена актуальная версия") : `Ошибка: ${json.error}`);
     } finally {
@@ -348,9 +365,24 @@ function App() {
 
   const installUpdate = async () => {
     setUpdateInstalling(true);
-    const json = await (await fetch("/api/update/install", { method: "POST" })).json();
+    const json = await apiFetch("/api/update/install", { method: "POST" });
     setMessage(json.ok ? "Переход в Recovery для обновления" : `Ошибка: ${json.error}`);
     if (!json.ok) setUpdateInstalling(false);
+  };
+
+  const saveApiPin = async (disable = false) => {
+    const nextPin = disable ? "" : newApiPin.trim();
+    if (!disable && (nextPin.length < 4 || nextPin.length > 16)) {
+      setMessage("Ошибка: PIN должен содержать 4-16 символов");
+      return;
+    }
+    const json = await postForm("/api/security/pin", { newPin: nextPin });
+    if (json.ok) {
+      updateSessionPin(nextPin);
+      setNewApiPin("");
+      setInfo((previous) => ({ ...previous, authEnabled: Boolean(nextPin) }));
+    }
+    setMessage(json.ok ? (nextPin ? "API PIN сохранён" : "Защита API отключена") : `Ошибка: ${json.error}`);
   };
 
   const selectWheelColor = (event, commit = false) => {
@@ -385,6 +417,7 @@ function App() {
     updateInfo, updateChecking, updateInstalling,
     logEntries, logLoading, refreshLog, clearLog,
     ledDetectActive, ledDetectIndex, ledDetectStep, ledDetectCounts, ledDetectOrder,
+    apiPin, updateSessionPin, newApiPin, setNewApiPin, saveApiPin,
     uiBrightness, geometryLedCount, availableSpiFrequencies, dataPinOptions,
     clockPinOptions, oePinOptions, powerPinOptions, wheelPosition, applyBrightness, applyEffect,
     applyLedGeometry, savePowerConfig, claimManualSource, releaseActiveSource,
@@ -393,11 +426,11 @@ function App() {
     checkUpdate, installUpdate,
     updateLedSide: (side, value) => setLedSides((previous) => ({ ...previous, [side]: value })),
     enterRecovery: async () => {
-      const json = await (await fetch("/api/recovery/enter", { method: "POST" })).json();
+      const json = await apiFetch("/api/recovery/enter", { method: "POST" });
       setMessage(json.ok ? "Переход в Recovery" : `Ошибка: ${json.error}`);
     },
     rebootDevice: async () => {
-      const json = await (await fetch("/api/reboot", { method: "POST" })).json();
+      const json = await apiFetch("/api/reboot", { method: "POST" });
       setMessage(json.ok ? "Перезагрузка устройства" : `Ошибка: ${json.error}`);
     },
   };

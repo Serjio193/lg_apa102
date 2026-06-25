@@ -16,6 +16,8 @@ static LBConfig cfg;
 static WebServer server(80);
 static bool apActive = false;
 static char lastError[128] = "idle";
+static char apiPin[17] = "";
+static constexpr unsigned long RECOVERY_AP_WINDOW_MS = 10UL * 60UL * 1000UL;
 
 static const char RECOVERY_HTML[] PROGMEM = R"rawliteral(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -38,7 +40,8 @@ button.s{background:#3a2430;color:#ffeef2}
 </div>
 <div class="c">
   <b>Update source</b>
-  <label>Pack base URL</label><div class="p">https://serjio193.github.io/lg_apa102/latest/</div>
+  <label>Pack base URL</label><div class="p" id="packUrl"></div>
+  <label>API PIN</label><input id="apiPin" type="password" maxlength="16" placeholder="PIN из основной системы">
   <div class="r">
     <button onclick="flash()">Flash signed release</button>
     <button class="s" onclick="bootMain()">Boot main</button>
@@ -54,23 +57,33 @@ button.s{background:#3a2430;color:#ffeef2}
 <script>
 const msg = document.getElementById('msg');
 const statusEl = document.getElementById('status');
+const apiPin = document.getElementById('apiPin');
+apiPin.value = sessionStorage.getItem('lg_api_pin') || '';
+apiPin.addEventListener('input', () => sessionStorage.setItem('lg_api_pin', apiPin.value));
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function apiFetch(url, options = {}){
+  const headers = new Headers(options.headers || {});
+  if (apiPin.value) headers.set('X-API-PIN', apiPin.value);
+  return fetch(url, {...options, headers});
+}
 async function loadStatus(){
   const r = await fetch('/api/status');
   const j = await r.json();
-  statusEl.innerHTML = `<span class="p">${j.mode}</span><span class="p">${j.ip}</span><span class="p">${j.host}</span><div style="margin-top:8px">${j.packBaseUrl}</div><div style="margin-top:8px">${j.lastError}</div>`;
+  document.getElementById('packUrl').textContent = j.packBaseUrl;
+  statusEl.innerHTML = `<span class="p">${esc(j.mode)}</span><span class="p">${esc(j.ip)}</span><span class="p">${esc(j.host)}</span><div style="margin-top:8px">${esc(j.lastError)}</div>`;
 }
 async function flash(){
-  const r = await fetch('/api/recovery/flash', {method:'POST'});
+  const r = await apiFetch('/api/recovery/flash', {method:'POST'});
   const j = await r.json();
   msg.textContent = j.ok ? 'flashing started' : ('error: ' + j.error);
 }
 async function bootMain(){
-  const r = await fetch('/api/recovery/boot_main', {method:'POST'});
+  const r = await apiFetch('/api/recovery/boot_main', {method:'POST'});
   const j = await r.json();
   msg.textContent = j.ok ? 'rebooting' : ('error: ' + j.error);
 }
 async function resetCfg(){
-  const r = await fetch('/api/recovery/reset_settings', {method:'POST'});
+  const r = await apiFetch('/api/recovery/reset_settings', {method:'POST'});
   const j = await r.json();
   msg.textContent = j.ok ? 'settings cleared' : ('error: ' + j.error);
 }
@@ -84,6 +97,23 @@ struct ReleaseInfo {
   char firmwareUrl[192];
   char firmwareSigUrl[192];
 };
+
+static bool apiPinMatches(const String &candidate) {
+  const size_t expectedLength = strlen(apiPin);
+  if (candidate.length() != expectedLength) return false;
+  uint8_t difference = 0;
+  for (size_t i = 0; i < expectedLength; ++i) {
+    difference |= static_cast<uint8_t>(apiPin[i] ^ candidate[i]);
+  }
+  return difference == 0;
+}
+
+static bool requireApiAuth() {
+  if (apiPin[0] == '\0') return true;
+  if (server.hasHeader("X-API-PIN") && apiPinMatches(server.header("X-API-PIN"))) return true;
+  server.send(401, "application/json", "{\"ok\":false,\"error\":\"API PIN required\"}");
+  return false;
+}
 
 static void setLastError(const char *msg) {
   strlcpy(lastError, msg ? msg : "error", sizeof(lastError));
@@ -305,22 +335,23 @@ static bool flashFirmwareFromUrl(const String &url, const String &sigUrl) {
 }
 
 static void handleStatus() {
-  char json[512];
+  char json[640];
+  const String deviceNameJson = lbJsonEscape(cfg.deviceName);
+  const String hostJson = lbJsonEscape(lbHostnameFromName(cfg.deviceName).c_str());
+  const String packBaseUrlJson = lbJsonEscape(cfg.packBaseUrl);
+  const String lastErrorJson = lbJsonEscape(lastError);
   snprintf(json, sizeof(json),
-           "{\"ok\":true,\"deviceName\":\"%s\",\"host\":\"%s\",\"mode\":\"%s\",\"ip\":\"%s\",\"packBaseUrl\":\"%s\",\"lastError\":\"%s\"}",
-           cfg.deviceName, lbHostnameFromName(cfg.deviceName).c_str(),
+           "{\"ok\":true,\"deviceName\":\"%s\",\"host\":\"%s\",\"mode\":\"%s\",\"ip\":\"%s\",\"packBaseUrl\":\"%s\",\"lastError\":\"%s\",\"authEnabled\":%s}",
+           deviceNameJson.c_str(), hostJson.c_str(),
            WiFi.status() == WL_CONNECTED ? "STA" : (apActive ? "AP" : "BOOT"),
-           currentIp().c_str(), cfg.packBaseUrl, lastError);
+           currentIp().c_str(), packBaseUrlJson.c_str(), lastErrorJson.c_str(),
+           apiPin[0] != '\0' ? "true" : "false");
   server.send(200, "application/json", json);
-}
-
-static void handleConfig() {
-  server.send(403, "application/json", "{\"ok\":false,\"error\":\"update URL is fixed\"}");
 }
 
 static bool performFlash() {
   String manifest;
-  String base = LB_DEFAULT_PACK_BASE_URL;
+  String base = cfg.packBaseUrl;
   if (!base.endsWith("/")) base += "/";
   if (!fetchText(base + "release.txt", manifest)) {
     setLastError("manifest download failed");
@@ -370,25 +401,27 @@ static void handleResetSettings() {
   prefs.begin(LB_PREFS_NS, false);
   prefs.clear();
   prefs.end();
+  apiPin[0] = '\0';
   lbSetDefaults(&cfg);
   lbSaveConfig(&cfg);
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
 static void setupWeb() {
+  static const char *headerKeys[] = {"X-API-PIN"};
+  server.collectHeaders(headerKeys, 1);
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", RECOVERY_HTML); });
   server.on("/api/status", HTTP_GET, handleStatus);
-  server.on("/api/config", HTTP_POST, handleConfig);
-  server.on("/api/recovery/flash", HTTP_POST, handleFlash);
-  server.on("/api/recovery/boot_main", HTTP_POST, handleBootMain);
-  server.on("/api/recovery/reset_settings", HTTP_POST, handleResetSettings);
+  server.on("/api/recovery/flash", HTTP_POST, []() { if (requireApiAuth()) handleFlash(); });
+  server.on("/api/recovery/boot_main", HTTP_POST, []() { if (requireApiAuth()) handleBootMain(); });
+  server.on("/api/recovery/reset_settings", HTTP_POST, []() { if (requireApiAuth()) handleResetSettings(); });
   server.begin();
 }
 
 void setup() {
   lbLoadConfig(&cfg);
+  lbLoadApiPin(apiPin, sizeof(apiPin));
   if (!lbValidateConfig(&cfg)) lbSetDefaults(&cfg);
-  strlcpy(cfg.packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg.packBaseUrl));
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   String host = lbHostnameFromName(cfg.deviceName);
@@ -419,4 +452,9 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  if (apActive && millis() >= RECOVERY_AP_WINDOW_MS) {
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA);
+    apActive = false;
+  }
 }

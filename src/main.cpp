@@ -18,6 +18,7 @@
 static LBConfig cfg;
 static WebServer server(80);
 static USBCDC hyperHdrUsb;
+static char apiPin[17] = "";
 static bool apActive = false;
 static bool apWindowExpired = false;
 static constexpr unsigned long AP_WINDOW_MS = 10UL * 60UL * 1000UL;
@@ -68,6 +69,23 @@ enum SourceOwner : uint8_t {
 };
 
 static SourceOwner sourceOwner = SOURCE_IDLE;
+
+static bool apiPinMatches(const String &candidate) {
+  const size_t expectedLength = strlen(apiPin);
+  if (candidate.length() != expectedLength) return false;
+  uint8_t difference = 0;
+  for (size_t i = 0; i < expectedLength; ++i) {
+    difference |= static_cast<uint8_t>(apiPin[i] ^ candidate[i]);
+  }
+  return difference == 0;
+}
+
+static bool requireApiAuth() {
+  if (apiPin[0] == '\0') return true;
+  if (server.hasHeader("X-API-PIN") && apiPinMatches(server.header("X-API-PIN"))) return true;
+  server.send(401, "application/json", "{\"ok\":false,\"error\":\"API PIN required\"}");
+  return false;
+}
 
 static void addLog(const char *message) {
   const uint8_t index = static_cast<uint8_t>((logStart + logCount) % LOG_CAPACITY);
@@ -754,7 +772,9 @@ static bool fetchReleaseVersion(String &version) {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  const String url = String(LB_DEFAULT_PACK_BASE_URL) + "release.txt";
+  String base = cfg.packBaseUrl;
+  if (!base.endsWith("/")) base += '/';
+  const String url = base + "release.txt";
   if (!http.begin(client, url)) return false;
   const int code = http.GET();
   if (code != HTTP_CODE_OK) {
@@ -774,7 +794,7 @@ static bool fetchReleaseVersion(String &version) {
 }
 
 static void handleInfo() {
-  char json[1300];
+  char json[1500];
   uint32_t autoOffRemaining = 0;
   const int32_t wifiRssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
   const uint32_t hyperHdrLastFrameAge = lastHyperHdrFrameMs > 0 ? millis() - lastHyperHdrFrameMs : 0;
@@ -783,14 +803,18 @@ static void handleInfo() {
     const uint32_t elapsed = millis() - powerOnSinceMs;
     autoOffRemaining = elapsed < duration ? (duration - elapsed + 59999UL) / 60000UL : 0;
   }
+  const String deviceNameJson = lbJsonEscape(cfg.deviceName);
+  const String hostJson = lbJsonEscape(lbHostnameFromName(cfg.deviceName).c_str());
+  const String wifiSsidJson = lbJsonEscape(cfg.wifiSsid);
+  const String packBaseUrlJson = lbJsonEscape(cfg.packBaseUrl);
   snprintf(json, sizeof(json),
-           "{\"ok\":true,\"deviceName\":\"%s\",\"host\":\"%s\",\"firmwareVersion\":\"%s\",\"mode\":\"%s\",\"ip\":\"%s\",\"wifiSsid\":\"%s\",\"wifiRssi\":%ld,\"uptimeMs\":%lu,\"freeHeap\":%lu,\"packBaseUrl\":\"%s\",\"sourceOwner\":%u,\"hyperHdrActive\":%s,\"hyperHdrFps\":%u,\"hyperHdrLastFrameMs\":%lu,\"hyperHdrFrames\":%lu,\"hyperHdrErrors\":%lu,\"dataPin\":%d,\"clockPin\":%d,\"oePin\":%d,\"powerPin\":%d,\"powerOnDelayMs\":%u,\"powerOffDelayMs\":%u,\"autoOffMinutes\":%u,\"autoOffRemaining\":%lu,\"ledCount\":%u,\"ledBrightness\":%u,\"stripType\":%u,\"spiHz\":%lu,\"colorOrder\":%u,\"ledTop\":%u,\"ledRight\":%u,\"ledBottom\":%u,\"ledLeft\":%u,\"firstLed\":%u,\"ledDirection\":%u,\"effect\":%u,\"effectSpeed\":%u,\"effectIntensity\":%u,\"oeActiveLow\":%s,\"powerActiveHigh\":%s,\"power\":%s,\"outputs\":%s}",
-           cfg.deviceName, lbHostnameFromName(cfg.deviceName).c_str(),
+           "{\"ok\":true,\"deviceName\":\"%s\",\"host\":\"%s\",\"firmwareVersion\":\"%s\",\"mode\":\"%s\",\"ip\":\"%s\",\"wifiSsid\":\"%s\",\"wifiRssi\":%ld,\"uptimeMs\":%lu,\"freeHeap\":%lu,\"packBaseUrl\":\"%s\",\"authEnabled\":%s,\"sourceOwner\":%u,\"hyperHdrActive\":%s,\"hyperHdrFps\":%u,\"hyperHdrLastFrameMs\":%lu,\"hyperHdrFrames\":%lu,\"hyperHdrErrors\":%lu,\"dataPin\":%d,\"clockPin\":%d,\"oePin\":%d,\"powerPin\":%d,\"powerOnDelayMs\":%u,\"powerOffDelayMs\":%u,\"autoOffMinutes\":%u,\"autoOffRemaining\":%lu,\"ledCount\":%u,\"ledBrightness\":%u,\"stripType\":%u,\"spiHz\":%lu,\"colorOrder\":%u,\"ledTop\":%u,\"ledRight\":%u,\"ledBottom\":%u,\"ledLeft\":%u,\"firstLed\":%u,\"ledDirection\":%u,\"effect\":%u,\"effectSpeed\":%u,\"effectIntensity\":%u,\"oeActiveLow\":%s,\"powerActiveHigh\":%s,\"power\":%s,\"outputs\":%s}",
+           deviceNameJson.c_str(), hostJson.c_str(),
            LB_FIRMWARE_VERSION,
            WiFi.status() == WL_CONNECTED ? "STA" : (apActive ? "AP" : "BOOT"),
-           currentIp().c_str(), cfg.wifiSsid, static_cast<long>(wifiRssi),
+           currentIp().c_str(), wifiSsidJson.c_str(), static_cast<long>(wifiRssi),
            static_cast<unsigned long>(millis()), static_cast<unsigned long>(ESP.getFreeHeap()),
-           cfg.packBaseUrl, sourceOwner,
+           packBaseUrlJson.c_str(), apiPin[0] != '\0' ? "true" : "false", sourceOwner,
            sourceOwner == SOURCE_HYPERHDR ? "true" : "false", hyperHdrFps,
            static_cast<unsigned long>(hyperHdrLastFrameAge),
            static_cast<unsigned long>(hyperHdrFrameCount), static_cast<unsigned long>(hyperHdrBadFrames),
@@ -811,7 +835,12 @@ static void handleConfig() {
   if (server.hasArg("wifiPass") && server.arg("wifiPass").length() > 0) {
     lbCopyArg(next.wifiPass, sizeof(next.wifiPass), server.arg("wifiPass"));
   }
-  strlcpy(next.packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(next.packBaseUrl));
+  if (server.hasArg("packBaseUrl")) {
+    String packBaseUrl = server.arg("packBaseUrl");
+    packBaseUrl.trim();
+    if (!packBaseUrl.endsWith("/")) packBaseUrl += '/';
+    lbCopyArg(next.packBaseUrl, sizeof(next.packBaseUrl), packBaseUrl);
+  }
   next.dataPin = lbArgPin(server, "dataPin", next.dataPin);
   next.clockPin = lbArgPin(server, "clockPin", next.clockPin);
   next.oePin = lbArgPin(server, "oePin", next.oePin);
@@ -874,9 +903,9 @@ static void handleUpdateCheck() {
   }
   const bool available = remoteVersion != LB_FIRMWARE_VERSION;
   String json = "{\"ok\":true,\"current\":\"";
-  json += LB_FIRMWARE_VERSION;
+  json += lbJsonEscape(LB_FIRMWARE_VERSION);
   json += "\",\"latest\":\"";
-  json += remoteVersion;
+  json += lbJsonEscape(remoteVersion.c_str());
   json += "\",\"available\":";
   json += available ? "true}" : "false}";
   server.send(200, "application/json", json);
@@ -904,9 +933,7 @@ static void handleWifiScan() {
   json = "{\"ok\":true,\"networks\":[";
   for (int i = 0; i < count; ++i) {
     if (i > 0) json += ',';
-    String ssid = WiFi.SSID(i);
-    ssid.replace("\\", "\\\\");
-    ssid.replace("\"", "\\\"");
+    const String ssid = lbJsonEscape(WiFi.SSID(i).c_str());
     json += "{\"ssid\":\"";
     json += ssid;
     json += "\",\"rssi\":";
@@ -930,7 +957,7 @@ static void handleLog() {
     json += "{\"timeMs\":";
     json += logEntries[index].timeMs;
     json += ",\"message\":\"";
-    json += logEntries[index].message;
+    json += lbJsonEscape(logEntries[index].message);
     json += "\"}";
   }
   json += "]}";
@@ -942,6 +969,20 @@ static void handleClearLog() {
   logCount = 0;
   addLog("Log cleared");
   server.send(200, "application/json", "{\"ok\":true}");
+}
+
+static void handleSecurityPin() {
+  if (!requireApiAuth()) return;
+  const String nextPin = server.arg("newPin");
+  if (!lbIsValidApiPin(nextPin)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"PIN must be 4-16 letters, digits, - or _\"}");
+    return;
+  }
+  strlcpy(apiPin, nextPin.c_str(), sizeof(apiPin));
+  lbSaveApiPin(apiPin);
+  server.send(200, "application/json",
+              apiPin[0] != '\0' ? "{\"ok\":true,\"authEnabled\":true}" :
+                                  "{\"ok\":true,\"authEnabled\":false}");
 }
 
 static void handleColor() {
@@ -1133,35 +1174,39 @@ static void handleReleaseSource() {
 }
 
 static void setupWeb() {
+  static const char *headerKeys[] = {"X-API-PIN"};
+  server.collectHeaders(headerKeys, 1);
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", UI_HTML); });
   server.on("/app.js", HTTP_GET, []() { server.send_P(200, "application/javascript", UI_APP_JS); });
   server.on("/api/info", HTTP_GET, handleInfo);
-  server.on("/api/config", HTTP_POST, handleConfig);
-  server.on("/api/recovery/enter", HTTP_POST, handleEnterRecovery);
-  server.on("/api/reboot", HTTP_POST, handleReboot);
+  server.on("/api/config", HTTP_POST, []() { if (requireApiAuth()) handleConfig(); });
+  server.on("/api/security/pin", HTTP_POST, handleSecurityPin);
+  server.on("/api/recovery/enter", HTTP_POST, []() { if (requireApiAuth()) handleEnterRecovery(); });
+  server.on("/api/reboot", HTTP_POST, []() { if (requireApiAuth()) handleReboot(); });
   server.on("/api/update/check", HTTP_GET, handleUpdateCheck);
-  server.on("/api/update/install", HTTP_POST, handleUpdateInstall);
-  server.on("/api/wifi/scan", HTTP_GET, handleWifiScan);
-  server.on("/api/log", HTTP_GET, handleLog);
-  server.on("/api/log/clear", HTTP_POST, handleClearLog);
-  server.on("/api/test/color", HTTP_POST, handleColor);
-  server.on("/api/test/off", HTTP_POST, handleOff);
-  server.on("/api/brightness", HTTP_POST, handleBrightness);
-  server.on("/api/power", HTTP_POST, handlePower);
-  server.on("/api/power/config", HTTP_POST, handlePowerConfig);
-  server.on("/api/led/config", HTTP_POST, handleLedConfig);
-  server.on("/api/led/detect/start", HTTP_POST, handleLedDetectStart);
-  server.on("/api/led/detect/stop", HTTP_POST, handleLedDetectStop);
-  server.on("/api/led/detect/status", HTTP_GET, handleLedDetectStatus);
-  server.on("/api/effect", HTTP_POST, handleEffect);
-  server.on("/api/source/manual", HTTP_POST, handleManualSource);
-  server.on("/api/source/release", HTTP_POST, handleReleaseSource);
+  server.on("/api/update/install", HTTP_POST, []() { if (requireApiAuth()) handleUpdateInstall(); });
+  server.on("/api/wifi/scan", HTTP_GET, []() { if (requireApiAuth()) handleWifiScan(); });
+  server.on("/api/log", HTTP_GET, []() { if (requireApiAuth()) handleLog(); });
+  server.on("/api/log/clear", HTTP_POST, []() { if (requireApiAuth()) handleClearLog(); });
+  server.on("/api/test/color", HTTP_POST, []() { if (requireApiAuth()) handleColor(); });
+  server.on("/api/test/off", HTTP_POST, []() { if (requireApiAuth()) handleOff(); });
+  server.on("/api/brightness", HTTP_POST, []() { if (requireApiAuth()) handleBrightness(); });
+  server.on("/api/power", HTTP_POST, []() { if (requireApiAuth()) handlePower(); });
+  server.on("/api/power/config", HTTP_POST, []() { if (requireApiAuth()) handlePowerConfig(); });
+  server.on("/api/led/config", HTTP_POST, []() { if (requireApiAuth()) handleLedConfig(); });
+  server.on("/api/led/detect/start", HTTP_POST, []() { if (requireApiAuth()) handleLedDetectStart(); });
+  server.on("/api/led/detect/stop", HTTP_POST, []() { if (requireApiAuth()) handleLedDetectStop(); });
+  server.on("/api/led/detect/status", HTTP_GET, []() { if (requireApiAuth()) handleLedDetectStatus(); });
+  server.on("/api/effect", HTTP_POST, []() { if (requireApiAuth()) handleEffect(); });
+  server.on("/api/source/manual", HTTP_POST, []() { if (requireApiAuth()) handleManualSource(); });
+  server.on("/api/source/release", HTTP_POST, []() { if (requireApiAuth()) handleReleaseSource(); });
   server.begin();
 }
 
 void setup() {
   addLog("Firmware boot");
   lbLoadConfig(&cfg);
+  lbLoadApiPin(apiPin, sizeof(apiPin));
   if (!lbValidateConfig(&cfg)) lbSetDefaults(&cfg);
   loadLedLayout();
   loadLedHardware();

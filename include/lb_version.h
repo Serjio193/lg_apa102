@@ -1,5 +1,3 @@
 #pragma once
 
-#ifndef LB_FIRMWARE_VERSION
-#define LB_FIRMWARE_VERSION "dev"
-#endif
+#define LB_FIRMWARE_VERSION "v0.1.2"

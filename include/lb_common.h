@@ -57,7 +57,9 @@ static inline void lbNormalizeDefaults(LBConfig *cfg) {
   if (cfg->deviceName[0] == '\0') {
     strlcpy(cfg->deviceName, LB_DEFAULT_DEVICE_NAME, sizeof(cfg->deviceName));
   }
-  strlcpy(cfg->packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg->packBaseUrl));
+  if (cfg->packBaseUrl[0] == '\0') {
+    strlcpy(cfg->packBaseUrl, LB_DEFAULT_PACK_BASE_URL, sizeof(cfg->packBaseUrl));
+  }
   if (cfg->ledCount == 0) cfg->ledCount = 1;
   if (cfg->ledBrightness == 0) cfg->ledBrightness = 1;
 }
@@ -86,6 +88,66 @@ static inline void lbSaveConfig(const LBConfig *cfg) {
   prefs.end();
 }
 
+static inline void lbLoadApiPin(char *pin, size_t pinSize) {
+  if (!pin || pinSize == 0) return;
+  pin[0] = '\0';
+  Preferences prefs;
+  prefs.begin(LB_PREFS_NS, true);
+  String stored = prefs.getString("api_pin", "");
+  prefs.end();
+  strlcpy(pin, stored.c_str(), pinSize);
+}
+
+static inline void lbSaveApiPin(const char *pin) {
+  Preferences prefs;
+  prefs.begin(LB_PREFS_NS, false);
+  prefs.putString("api_pin", pin ? pin : "");
+  prefs.end();
+}
+
+static inline bool lbIsValidApiPin(const String &pin) {
+  if (pin.length() == 0) return true;
+  if (pin.length() < 4 || pin.length() > 16) return false;
+  for (size_t i = 0; i < pin.length(); ++i) {
+    const char c = pin[i];
+    if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') return false;
+  }
+  return true;
+}
+
+static inline bool lbIsValidPackBaseUrl(const char *url) {
+  if (!url || url[0] == '\0') return false;
+  const String value(url);
+  return (value.startsWith("https://") || value.startsWith("http://")) &&
+         value.length() < 161;
+}
+
+static inline String lbJsonEscape(const char *value) {
+  String escaped;
+  if (!value) return escaped;
+  escaped.reserve(strlen(value) + 8);
+  for (const unsigned char *p = reinterpret_cast<const unsigned char *>(value); *p; ++p) {
+    switch (*p) {
+      case '"': escaped += "\\\""; break;
+      case '\\': escaped += "\\\\"; break;
+      case '\b': escaped += "\\b"; break;
+      case '\f': escaped += "\\f"; break;
+      case '\n': escaped += "\\n"; break;
+      case '\r': escaped += "\\r"; break;
+      case '\t': escaped += "\\t"; break;
+      default:
+        if (*p < 0x20) {
+          char encoded[7];
+          snprintf(encoded, sizeof(encoded), "\\u%04x", *p);
+          escaped += encoded;
+        } else {
+          escaped += static_cast<char>(*p);
+        }
+    }
+  }
+  return escaped;
+}
+
 static inline bool lbIsValidOutputPin(int16_t pin) {
   return pin < 0 || GPIO_IS_VALID_OUTPUT_GPIO(static_cast<gpio_num_t>(pin));
 }
@@ -107,6 +169,7 @@ static inline bool lbValidateConfig(const LBConfig *cfg) {
   if (cfg->deviceName[0] == '\0') return false;
   if (cfg->ledCount < 1 || cfg->ledCount > 2048) return false;
   if (cfg->ledBrightness < 1 || cfg->ledBrightness > 31) return false;
+  if (!lbIsValidPackBaseUrl(cfg->packBaseUrl)) return false;
   if (!lbIsValidOutputPin(cfg->dataPin) || !lbIsValidOutputPin(cfg->clockPin) ||
       !lbIsValidOutputPin(cfg->oePin) || !lbIsValidOutputPin(cfg->powerPin)) {
     return false;

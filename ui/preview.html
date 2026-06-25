@@ -186,6 +186,11 @@
     .settings-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
     .settings-buttons button{height:46px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.04);color:var(--text);font-weight:800;cursor:pointer}
     .settings-buttons button.warning{border-color:rgba(247,201,92,.25);background:rgba(247,201,92,.08);color:var(--amber)}
+    .security-status{padding:11px 12px;border:1px solid rgba(247,201,92,.22);border-radius:12px;background:rgba(247,201,92,.07);color:var(--amber);font-size:12px}
+    .security-status.enabled{border-color:rgba(74,225,140,.24);background:rgba(74,225,140,.07);color:var(--green)}
+    .security-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    .security-buttons button{height:44px;border:1px solid rgba(95,178,255,.25);border-radius:12px;background:rgba(95,178,255,.10);color:var(--blue);font-weight:800;cursor:pointer}
+    .security-buttons button.warning{border-color:rgba(247,201,92,.25);background:rgba(247,201,92,.08);color:var(--amber)}
     .device-log{max-height:270px;overflow:auto;border:1px solid var(--line);border-radius:14px;background:#050a12}
     .device-log-row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:10px 11px;font-family:Consolas,"Courier New",monospace;font-size:11px;line-height:1.4}
     .device-log-row+.device-log-row{border-top:1px solid rgba(255,255,255,.05)}
@@ -284,6 +289,7 @@
         hyperHdrLastFrameMs: 12,
         hyperHdrFrames: 18422,
         hyperHdrErrors: 0,
+        authEnabled: false,
         firmwareVersion: "dev",
       };
       const ok = (extra = {}) => ({ ok: true, ...extra });
@@ -328,6 +334,10 @@
             state.powerActiveHigh = body.get("powerActiveHigh") !== "0";
           }
           return new Response(JSON.stringify(ok()), { headers: { "Content-Type": "application/json" } });
+        }
+        if (url === "/api/security/pin" && method === "POST") {
+          state.authEnabled = Boolean(body?.get("newPin"));
+          return new Response(JSON.stringify(ok({ authEnabled: state.authEnabled })), { headers: { "Content-Type": "application/json" } });
         }
         if (url === "/api/brightness" && method === "POST") {
           if (body) state.ledBrightness = Number(body.get("value") || state.ledBrightness);
@@ -472,6 +482,6 @@
       };
     })();
   </script>
-  <script src="./dist/app.js?v=27"></script>
+  <script src="./dist/app.js?v=28"></script>
 </body>
 </html>

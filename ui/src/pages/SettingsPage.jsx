@@ -6,6 +6,7 @@ export function SettingsPage({ vm }) {
     setSection, scanWifi, wifiScanning, wifiNetworks, form, setForm,
     rebootDevice, enterRecovery, saveConfig, busy, updateInfo, updateChecking, updateInstalling,
     checkUpdate, installUpdate, logEntries, logLoading, refreshLog, clearLog, info,
+    apiPin, updateSessionPin, newApiPin, setNewApiPin, saveApiPin,
   } = vm;
 
   useEffect(() => {
@@ -56,9 +57,40 @@ export function SettingsPage({ vm }) {
       </Card>
 
       <Card className="settings-card">
+        <SectionTitle icon="⌁">Защита Web API</SectionTitle>
+        <div className={info?.authEnabled ? "security-status enabled" : "security-status"}>
+          {info?.authEnabled ? "PIN-защита включена" : "PIN-защита не настроена"}
+        </div>
+        <label>PIN текущей сессии</label>
+        <input
+          type="password"
+          maxLength="16"
+          value={apiPin}
+          placeholder="Введите PIN для управления"
+          onChange={(event) => updateSessionPin(event.target.value)}
+        />
+        <label>Новый PIN, 4-16 символов</label>
+        <input
+          type="password"
+          maxLength="16"
+          value={newApiPin}
+          placeholder="Буквы, цифры, - или _"
+          onChange={(event) => setNewApiPin(event.target.value)}
+        />
+        <div className="security-buttons">
+          <button type="button" onClick={() => saveApiPin(false)}>Сохранить PIN</button>
+          {info?.authEnabled && <button type="button" className="warning" onClick={() => saveApiPin(true)}>Отключить</button>}
+        </div>
+      </Card>
+
+      <Card className="settings-card">
         <SectionTitle icon="↻">Обновление и восстановление</SectionTitle>
         <label>Адрес пакета обновления</label>
-        <div className="settings-readonly">{form.packBaseUrl}</div>
+        <input
+          type="url"
+          value={form.packBaseUrl}
+          onChange={(event) => setForm({ ...form, packBaseUrl: event.target.value })}
+        />
         <label>Текущая версия</label>
         <div className="settings-readonly">{info?.firmwareVersion ?? "—"}</div>
         <button type="button" className="settings-action update-check" onClick={checkUpdate} disabled={updateChecking || updateInstalling}>

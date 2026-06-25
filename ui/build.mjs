@@ -214,6 +214,11 @@ static constexpr const char UI_HTML[] PROGMEM = R"html(
     .settings-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
     .settings-buttons button{height:46px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.04);color:var(--text);font-weight:800;cursor:pointer}
     .settings-buttons button.warning{border-color:rgba(247,201,92,.25);background:rgba(247,201,92,.08);color:var(--amber)}
+    .security-status{padding:11px 12px;border:1px solid rgba(247,201,92,.22);border-radius:12px;background:rgba(247,201,92,.07);color:var(--amber);font-size:12px}
+    .security-status.enabled{border-color:rgba(74,225,140,.24);background:rgba(74,225,140,.07);color:var(--green)}
+    .security-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    .security-buttons button{height:44px;border:1px solid rgba(95,178,255,.25);border-radius:12px;background:rgba(95,178,255,.10);color:var(--blue);font-weight:800;cursor:pointer}
+    .security-buttons button.warning{border-color:rgba(247,201,92,.25);background:rgba(247,201,92,.08);color:var(--amber)}
     .device-log{max-height:270px;overflow:auto;border:1px solid var(--line);border-radius:14px;background:#050a12}
     .device-log-row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:10px 11px;font-family:Consolas,"Courier New",monospace;font-size:11px;line-height:1.4}
     .device-log-row+.device-log-row{border-top:1px solid rgba(255,255,255,.05)}
