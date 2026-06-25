@@ -53,7 +53,16 @@ jobs:
       - name: Build release package
         shell: pwsh
         run: |
-          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "main-${{ github.run_number }}-${{ github.sha }}".Substring(0, 20) }
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}"
+          } else {
+            $header = Get-Content -Raw include/lb_version.h
+            $match = [regex]::Match($header, 'LB_FIRMWARE_VERSION\s+"([^"]+)"')
+            if (-not $match.Success) {
+              throw "LB_FIRMWARE_VERSION not found"
+            }
+            $version = $match.Groups[1].Value
+          }
           ./scripts/build_release.ps1 -Version $version
 
       - name: Publish to gh-pages
